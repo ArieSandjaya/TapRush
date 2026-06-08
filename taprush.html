@@ -2,297 +2,153 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <title>Tap Rush</title>
 <style>
-    * { margin:0; padding:0; box-sizing:border-box; }
-    body {
-        background:#0f0f1a;
-        display:flex; justify-content:center; align-items:center;
-        height:100dvh; overflow:hidden; touch-action:none;
-        font-family: system-ui, -apple-system, sans-serif;
-    }
-    canvas {
-        display:block;
-        max-width:100%; max-height:100%;
-        background:#0f0f1a;
-    }
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#0f0f1a;touch-action:none;-webkit-user-select:none;user-select:none}
+canvas{display:block;width:100vw;height:100dvh;background:#0f0f1a}
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 <script>
-const SEGMENTS = 7;
-const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
+const S=7
+const c=document.getElementById('c')
+const x=c.getContext('2d')
+let W,H,sw,ph,py,br,running=false,alive=false,score=0,hi=parseInt(localStorage.getItem('tr_hi'))||0,gap=3
+let balls=[],speed=0.45,intv=1500,lastSpawn=0,lastT=0,streak=0,play=0
 
-let W, H, segW, platH, platY, ballR, dpr;
+function resize(){
+ W=c.width=window.innerWidth
+ H=c.height=window.innerHeight
+ sw=W/S
+ ph=H*0.12
+ py=H-ph
+ br=sw*0.35
+}
+window.onresize=resize
+resize()
 
-function resize() {
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const maxW = Math.min(window.innerWidth, 500);
-    const maxH = window.innerHeight;
-    canvas.style.width = maxW + 'px';
-    canvas.style.height = maxH + 'px';
-    canvas.width = maxW * dpr;
-    canvas.height = maxH * dpr;
-    W = canvas.width;
-    H = canvas.height;
-    segW = W / SEGMENTS;
-    platH = H * 0.12;
-    platY = H - platH;
-    ballR = segW * 0.35;
-    ctx.scale(dpr, dpr);
-    // adjust for dpr on positions
-    // better to just work in CSS pixels
+function tap(e){
+ e.preventDefault()
+ const t=e.changedTouches?e.changedTouches[0]:e
+ const r=c.getBoundingClientRect()
+ const x=(t.clientX-r.left)/r.width*W
+ if(!running||!alive){start();return}
+ if(x<W/2){if(gap>0)gap--}else{if(gap<S-1)gap++}
+}
+c.addEventListener('click',tap)
+c.addEventListener('touchstart',tap,{passive:false})
+
+function start(){
+ gap=Math.floor(S/2)
+ score=0;alive=true;running=true
+ balls=[];speed=0.45;intv=1500;streak=0;lastSpawn=0;lastT=0
+ play++
 }
 
-// work in CSS pixels internally
-let CSS_W, CSS_H;
-
-function resizeCSS() {
-    CSS_W = Math.min(window.innerWidth, 500);
-    CSS_H = window.innerHeight;
-    canvas.style.width = CSS_W + 'px';
-    canvas.style.height = CSS_H + 'px';
-    canvas.width = CSS_W * dpr;
-    canvas.height = CSS_H * dpr;
-    segW = CSS_W / SEGMENTS;
-    platH = CSS_H * 0.12;
-    platY = CSS_H - platH;
-    ballR = segW * 0.35;
+function tick(t){
+ if(!running||!alive)return
+ if(!lastT){lastT=t;lastSpawn=t;return}
+ const dt=Math.min((t-lastT)/1000,0.05)
+ lastT=t
+ if(t-lastSpawn>=intv){
+  balls.push({c:Math.floor(Math.random()*S),p:0})
+  lastSpawn=t
+ }
+ for(let i=balls.length-1;i>=0;i--){
+  const b=balls[i]
+  b.p+=speed*dt
+  if(b.p>=1){
+   balls.splice(i,1)
+   if(b.c===gap){alive=false;if(score>hi){hi=score;localStorage.setItem('tr_hi',hi)};return}
+   score++;streak++
+   if(streak%5===0){speed=Math.min(speed+0.04,2);intv=Math.max(intv-50,300)}
+  }
+ }
 }
 
-window.addEventListener('resize', resizeCSS);
-resizeCSS();
-
-// ─── Game State ──────────────────────────────────────────
-let state = {
-    gap: Math.floor(SEGMENTS / 2),
-    score: 0,
-    highScore: parseInt(localStorage.getItem('taprush_high')) || 0,
-    alive: false,
-    playing: false,
-    balls: [],
-    speed: 0.45,
-    interval: 1500,
-    lastSpawn: 0,
-    streak: 0,
-    playCount: 0,
-};
-
-const SPEED_STEP = 0.04;
-const INTERVAL_STEP = 50;
-const INTERVAL_MIN = 300;
-const SPEED_MAX = 2.0;
-
-function startGame() {
-    state.gap = Math.floor(SEGMENTS / 2);
-    state.score = 0;
-    state.alive = true;
-    state.playing = true;
-    state.balls = [];
-    state.speed = 0.45;
-    state.interval = 1500;
-    state.streak = 0;
-    state.lastSpawn = 0;
-    state.lastTime = 0;
-    state.playCount++;
+function draw(){
+ x.clearRect(0,0,W,H)
+ // bg
+ x.fillStyle='#0f0f1a'
+ x.fillRect(0,0,W,H)
+ // platform
+ for(let i=0;i<S;i++){
+  const l=i*sw+1,w=sw-2,h=ph-2
+  if(i===gap){
+   x.fillStyle='#1a1a2e'
+   x.fillRect(l,py+1,w,h)
+   x.strokeStyle='#e74c3c'
+   x.lineWidth=3
+   x.strokeRect(l,py+1,w,h)
+  }else{
+   x.fillStyle='#6c63ff'
+   x.fillRect(l,py+1,w,h)
+  }
+ }
+ // balls
+ for(const b of balls){
+  const cx=b.c*sw+sw/2,cy=py*b.p
+  x.fillStyle='rgba(243,156,18,0.2)'
+  x.beginPath()
+  x.arc(cx,cy,br*2.2,0,7)
+  x.fill()
+  x.fillStyle='#f1c40f'
+  x.beginPath()
+  x.arc(cx,cy,br,0,7)
+  x.fill()
+  x.fillStyle='rgba(255,255,255,0.5)'
+  x.beginPath()
+  x.arc(cx-br*0.2,cy-br*0.2,br*0.5,0,7)
+  x.fill()
+ }
+ // score
+ x.fillStyle='#fff'
+ x.textAlign='center'
+ x.textBaseline='top'
+ x.font='bold '+Math.round(sw*1.2)+'px system-ui'
+ x.fillText(String(score),W/2,50)
+ x.fillStyle='rgba(255,255,255,0.5)'
+ x.font=Math.round(sw*0.5)+'px system-ui'
+ x.fillText('Best: '+String(hi),W/2,90)
+ // overlays
+ if(!running){
+  x.fillStyle='#fff'
+  x.font='bold '+Math.round(sw*1.3)+'px system-ui'
+  x.textBaseline='middle'
+  x.fillText('⚡ Tap Rush',W/2,H*0.32)
+  x.font=Math.round(sw*0.55)+'px system-ui'
+  x.fillStyle='rgba(255,255,255,0.8)'
+  x.fillText('Tap anywhere to start',W/2,H*0.42)
+  x.font=Math.round(sw*0.4)+'px system-ui'
+  x.fillStyle='rgba(255,255,255,0.5)'
+  x.fillText('← Tap left  ·  Tap right →',W/2,H*0.50)
+  x.fillText('Move the gap away from the balls!',W/2,H*0.56)
+ }
+ if(!alive&&running){
+  x.fillStyle='rgba(0,0,0,0.55)'
+  x.fillRect(0,0,W,H)
+  x.fillStyle='#e74c3c'
+  x.font='bold '+Math.round(sw*1.3)+'px system-ui'
+  x.textBaseline='middle'
+  x.textAlign='center'
+  x.fillText('Game Over',W/2,H*0.32)
+  x.fillStyle='#fff'
+  x.font='bold '+Math.round(sw*0.9)+'px system-ui'
+  x.fillText('Score: '+String(score),W/2,H*0.42)
+  x.fillStyle='rgba(255,255,255,0.5)'
+  x.font=Math.round(sw*0.5)+'px system-ui'
+  x.fillText('Best: '+String(hi),W/2,H*0.50)
+  x.fillStyle='rgba(255,255,255,0.8)'
+  x.font=Math.round(sw*0.55)+'px system-ui'
+  x.fillText('Tap anywhere to retry',W/2,H*0.62)
+ }
 }
 
-// ─── Input ──────────────────────────────────────────────
-canvas.addEventListener('click', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) * (CSS_W / rect.width);
-    if (!state.playing || !state.alive) {
-        startGame();
-        return;
-    }
-    if (x < CSS_W / 2) {
-        if (state.gap > 0) state.gap--;
-    } else {
-        if (state.gap < SEGMENTS - 1) state.gap++;
-    }
-});
-
-canvas.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    const t = e.touches[0];
-    const rect = canvas.getBoundingClientRect();
-    const x = (t.clientX - rect.left) * (CSS_W / rect.width);
-    if (!state.playing || !state.alive) {
-        startGame();
-        return;
-    }
-    if (x < CSS_W / 2) {
-        if (state.gap > 0) state.gap--;
-    } else {
-        if (state.gap < SEGMENTS - 1) state.gap++;
-    }
-}, { passive: false });
-
-// ─── Game Loop ──────────────────────────────────────────
-function update(now) {
-    if (!state.playing || !state.alive) return;
-
-    if (!state.lastTime) { state.lastTime = now; state.lastSpawn = now; return; }
-    const dt = Math.min((now - state.lastTime) / 1000, 0.05);
-    state.lastTime = now;
-
-    // spawn
-    if (now - state.lastSpawn >= state.interval) {
-        state.balls.push({ col: Math.floor(Math.random() * SEGMENTS), prog: 0 });
-        state.lastSpawn = now;
-    }
-
-    // move balls
-    for (let i = state.balls.length - 1; i >= 0; i--) {
-        const b = state.balls[i];
-        b.prog += state.speed * dt;
-        if (b.prog >= 1) {
-            state.balls.splice(i, 1);
-            if (b.col === state.gap) {
-                state.alive = false;
-                if (state.score > state.highScore) {
-                    state.highScore = state.score;
-                    localStorage.setItem('taprush_high', state.highScore);
-                }
-                return;
-            }
-            state.score++;
-            state.streak++;
-            if (state.streak % 5 === 0) {
-                state.speed = Math.min(state.speed + SPEED_STEP, SPEED_MAX);
-                state.interval = Math.max(state.interval - INTERVAL_STEP, INTERVAL_MIN);
-            }
-        }
-    }
-}
-
-function draw() {
-    ctx.save();
-    // scale for dpr
-    ctx.scale(dpr, dpr);
-
-    // background
-    ctx.fillStyle = '#0f0f1a';
-    ctx.fillRect(0, 0, CSS_W, CSS_H);
-
-    // platform
-    for (let i = 0; i < SEGMENTS; i++) {
-        const x = i * segW + 1;
-        const w = segW - 2;
-        const h = platH - 2;
-        if (i === state.gap) {
-            ctx.fillStyle = '#1a1a2e';
-            ctx.fillRect(x, platY + 1, w, h);
-            ctx.strokeStyle = '#e74c3c';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(x, platY + 1, w, h);
-        } else {
-            ctx.fillStyle = '#6c63ff';
-            ctx.fillRect(x, platY + 1, w, h);
-        }
-    }
-
-    // score
-    ctx.fillStyle = '#ffffff';
-    ctx.font = `bold ${Math.round(segW * 1.2)}px system-ui`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillText(state.score.toString(), CSS_W / 2, 50);
-
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.font = `${Math.round(segW * 0.5)}px system-ui`;
-    ctx.fillText('Best: ' + state.highScore.toString(), CSS_W / 2, 90);
-
-    // balls
-    for (const b of state.balls) {
-        const cx = b.col * segW + segW / 2;
-        const cy = platY * b.prog;
-
-        // glow
-        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, ballR * 2.2);
-        grad.addColorStop(0, 'rgba(243, 156, 18, 0.25)');
-        grad.addColorStop(1, 'rgba(243, 156, 18, 0)');
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(cx, cy, ballR * 2.2, 0, Math.PI * 2);
-        ctx.fill();
-
-        // ball
-        ctx.fillStyle = '#f1c40f';
-        ctx.beginPath();
-        ctx.arc(cx, cy, ballR, 0, Math.PI * 2);
-        ctx.fill();
-
-        // highlight
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
-        ctx.beginPath();
-        ctx.arc(cx - ballR * 0.2, cy - ballR * 0.2, ballR * 0.5, 0, Math.PI * 2);
-        ctx.fill();
-    }
-
-    // overlays
-    if (!state.playing) {
-        ctx.fillStyle = '#ffffff';
-        ctx.font = `bold ${Math.round(segW * 1.3)}px system-ui`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('Tap Rush', CSS_W / 2, CSS_H * 0.32);
-
-        ctx.font = `${Math.round(segW * 0.55)}px system-ui`;
-        ctx.fillStyle = 'rgba(255,255,255,0.8)';
-        ctx.fillText('Tap anywhere to start', CSS_W / 2, CSS_H * 0.42);
-
-        ctx.font = `${Math.round(segW * 0.4)}px system-ui`;
-        ctx.fillStyle = 'rgba(255,255,255,0.45)';
-        ctx.fillText('←  Tap left  ·  right  →', CSS_W / 2, CSS_H * 0.50);
-        ctx.fillText('Move the gap away from the falling balls!', CSS_W / 2, CSS_H * 0.56);
-    }
-
-    if (!state.alive && state.playing) {
-        // overlay
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
-        ctx.fillRect(0, 0, CSS_W, CSS_H);
-
-        ctx.fillStyle = '#e74c3c';
-        ctx.font = `bold ${Math.round(segW * 1.3)}px system-ui`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('Game Over', CSS_W / 2, CSS_H * 0.32);
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = `bold ${Math.round(segW * 0.9)}px system-ui`;
-        ctx.fillText('Score: ' + state.score.toString(), CSS_W / 2, CSS_H * 0.42);
-
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
-        ctx.font = `${Math.round(segW * 0.5)}px system-ui`;
-        ctx.fillText('High Score: ' + state.highScore.toString(), CSS_W / 2, CSS_H * 0.50);
-
-        ctx.fillStyle = 'rgba(255,255,255,0.8)';
-        ctx.font = `${Math.round(segW * 0.55)}px system-ui`;
-        ctx.fillText('Tap anywhere to retry', CSS_W / 2, CSS_H * 0.62);
-
-        // quick restart tap hint
-        ctx.fillStyle = 'rgba(255,255,255,0.3)';
-        ctx.font = `${Math.round(segW * 0.35)}px system-ui`;
-        ctx.fillText('Tap to continue', CSS_W / 2, CSS_H * 0.70);
-    }
-
-    ctx.restore();
-}
-
-function loop(now) {
-    update(now);
-    draw();
-    requestAnimationFrame(loop);
-}
-
-// ─── Start ──────────────────────────────────────────────
-state.playing = false;
-state.alive = false;
-requestAnimationFrame(loop);
+function loop(t){tick(t);draw();requestAnimationFrame(loop)}
+requestAnimationFrame(loop)
 </script>
 </body>
 </html>
